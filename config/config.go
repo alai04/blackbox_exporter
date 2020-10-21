@@ -321,3 +321,26 @@ func (s *HeaderMatch) UnmarshalYAML(unmarshal func(interface{}) error) error {
 
 	return nil
 }
+
+// UnmarshalYAML implements the yaml.Unmarshaler interface.
+func (s *FakeICMPProbe) UnmarshalYAML(unmarshal func(interface{}) error) error {
+	type plain FakeICMPProbe
+	if err := unmarshal((*plain)(s)); err != nil {
+		return err
+	}
+	return nil
+}
+
+// UnmarshalYAML implements the yaml.Unmarshaler interface.
+func (s *FailureMetric) UnmarshalYAML(unmarshal func(interface{}) error) error {
+	type plain FailureMetric
+	if err := unmarshal((*plain)(s)); err != nil {
+		return err
+	}
+
+	if s.Regexp == "" {
+		return errors.New("regexp must be set for Failure metrics")
+	}
+
+	return nil
+}

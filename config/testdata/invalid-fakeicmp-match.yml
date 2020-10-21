@@ -1,0 +1,7 @@
+modules:
+  fakeicmp_test:
+    prober: fakeicmp
+    fakeicmp:
+      fail_metrics:
+        - mtbf: 720h
+          mttr: 1h

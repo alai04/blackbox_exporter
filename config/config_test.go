@@ -63,6 +63,10 @@ func TestLoadBadConfigs(t *testing.T) {
 			ConfigFile:    "testdata/invalid-http-header-match.yml",
 			ExpectedError: "error parsing config file: regexp must be set for HTTP header matchers",
 		},
+		{
+			ConfigFile:    "testdata/invalid-fakeicmp-match.yml",
+			ExpectedError: "error parsing config file: regexp must be set for Failure metrics",
+		},
 	}
 	for i, test := range tests {
 		err := sc.ReloadConfig(test.ConfigFile)
