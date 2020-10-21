@@ -115,12 +115,13 @@ func (sc *SafeConfig) ReloadConfig(confFile string) (err error) {
 }
 
 type Module struct {
-	Prober  string        `yaml:"prober,omitempty"`
-	Timeout time.Duration `yaml:"timeout,omitempty"`
-	HTTP    HTTPProbe     `yaml:"http,omitempty"`
-	TCP     TCPProbe      `yaml:"tcp,omitempty"`
-	ICMP    ICMPProbe     `yaml:"icmp,omitempty"`
-	DNS     DNSProbe      `yaml:"dns,omitempty"`
+	Prober   string        `yaml:"prober,omitempty"`
+	Timeout  time.Duration `yaml:"timeout,omitempty"`
+	HTTP     HTTPProbe     `yaml:"http,omitempty"`
+	TCP      TCPProbe      `yaml:"tcp,omitempty"`
+	ICMP     ICMPProbe     `yaml:"icmp,omitempty"`
+	DNS      DNSProbe      `yaml:"dns,omitempty"`
+	FakeICMP FakeICMPProbe `yaml:"fakeicmp,omitempty"`
 }
 
 type HTTPProbe struct {
@@ -169,6 +170,10 @@ type ICMPProbe struct {
 	SourceIPAddress    string `yaml:"source_ip_address,omitempty"`
 	PayloadSize        int    `yaml:"payload_size,omitempty"`
 	DontFragment       bool   `yaml:"dont_fragment,omitempty"`
+}
+
+type FakeICMPProbe struct {
+	IPProtocol string `yaml:"preferred_ip_protocol,omitempty"` // Defaults to "ip6".
 }
 
 type DNSProbe struct {
