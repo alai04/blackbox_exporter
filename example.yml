@@ -135,3 +135,16 @@ modules:
       transport_protocol: "tcp" # defaults to "udp"
       preferred_ip_protocol: "ip4" # defaults to "ip6"
       query_name: "www.prometheus.io"
+  fakeicmp_example:
+    prober: fakeicmp
+    fakeicmp:
+      fail_metrics:
+        - regexp: '^192\.10.*'
+          mtbf: 720h
+          mttr: 1h
+        - regexp: '^192\.20.*'
+          mtbf: 1h
+          mttr: 1h
+        - regexp: '^192\.30.*'
+          mtbf: 1m
+          mttr: 1m

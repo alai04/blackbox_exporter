@@ -173,7 +173,14 @@ type ICMPProbe struct {
 }
 
 type FakeICMPProbe struct {
-	IPProtocol string `yaml:"preferred_ip_protocol,omitempty"` // Defaults to "ip6".
+	IPProtocol    string          `yaml:"preferred_ip_protocol,omitempty"` // Defaults to "ip6".
+	MetricsRegexp []FailureMetric `yaml:"fail_metrics,omitempty"`
+}
+
+type FailureMetric struct {
+	Regexp string        `yaml:"regexp,omitempty"`
+	MTBF   time.Duration `yaml:"mtbf,omitempty"`
+	MTTR   time.Duration `yaml:"mttr,omitempty"`
 }
 
 type DNSProbe struct {
