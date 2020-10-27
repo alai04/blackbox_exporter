@@ -26,60 +26,83 @@ import (
 	"golang.org/x/net/icmp"
 
 	"github.com/prometheus/blackbox_exporter/config"
+	"gonum.org/v1/gonum/stat/distuv"
 )
 
-// FailureEquipments stores recovery time of failure equipments
-type FailureEquipments struct {
-	recoveryTime map[string]time.Time
-	config       config.FakeICMPProbe
-	logger       log.Logger
+// EquipmentStatus stores status of equipment
+type EquipmentStatus struct {
+	ok        bool
+	startFrom time.Time
+	mtbf      float64
+	mttr      float64
 }
 
 func init() {
 	rand.Seed(time.Now().UnixNano())
 }
 
-// IsOK return if target is OK
-func (s *FailureEquipments) IsOK(target string) bool {
-	r, ok := s.recoveryTime[target]
-	if ok { // target是失效设备
-		level.Debug(s.logger).Log("msg", "target is in failure list")
-		if r.After(time.Now()) { // 修复时间未到
-			return false
-		}
-		level.Debug(s.logger).Log("msg", "but recoveryTime is over")
-		delete(s.recoveryTime, target) // 修复时间已到，删除失效记录
+func (s *EquipmentStatus) String() string {
+	str := "Bad"
+	if s.ok {
+		str = "Good"
 	}
+	return fmt.Sprintf("%s %v", str, time.Now().Sub(s.startFrom)) // 处理当前状态多长时间
+}
 
-	for _, metric := range s.config.MetricsRegexp {
-		matched, _ := regexp.MatchString(metric.Regexp, target)
-		if matched {
-			failureProbability := float64(metric.MTTR) / float64(metric.MTBF+metric.MTTR) // 失效概率 = MTTR/(MTBF+MTTR)
-			p := rand.Float64()
-			level.Debug(s.logger).Log("except", failureProbability, "get", p)
-			if p <= failureProbability {
-				// 按正态分布估算修复时间，取平均值为MTTR，标准差为MTTR/5
-				recoveryTime := time.Duration(rand.NormFloat64()*float64(metric.MTTR)/5 + float64(metric.MTTR))
-				s.recoveryTime[target] = time.Now().Add(recoveryTime)
-				level.Debug(s.logger).Log("msg", "put target in failure list", "recoveryTime", recoveryTime)
-				return false
+// 根据正态分布累积密度函数计算结束当前状态的概率，返回true表示当前状态不改变
+func (s *EquipmentStatus) guess(logger log.Logger) bool {
+	if s.mttr <= 0.0 {
+		level.Debug(logger).Log("msg", "MTTR <= 0.0, always OK")
+		s.ok = true
+		return true
+	}
+	mu := s.mttr
+	if s.ok {
+		mu = s.mtbf
+	}
+	dist := distuv.Normal{
+		Mu:    mu,
+		Sigma: mu / 5,
+	}
+	elapsed := time.Now().Sub(s.startFrom)
+	exceptProb := dist.CDF(float64(elapsed))
+	getProb := rand.Float64()
+	level.Debug(logger).Log("elapsed", elapsed, "exceptProb", exceptProb, "getProb", getProb)
+	return getProb > exceptProb
+}
+
+var allStatus = make(map[string]*EquipmentStatus)
+
+// IsOK return true if target is OK
+func IsOK(target string, config config.FakeICMPProbe, logger log.Logger) bool {
+	refresh := true
+	status, ok := allStatus[target]
+	if !ok { // 第一次访问该target
+		status = &EquipmentStatus{
+			mtbf: 1.0,
+			mttr: 0.0,
+		}
+		for _, metric := range config.MetricsRegexp {
+			matched, _ := regexp.MatchString(metric.Regexp, target)
+			level.Debug(logger).Log("regexp", metric.Regexp, "target", target, "matched", matched)
+			if matched {
+				status.mtbf = float64(metric.MTBF)
+				status.mttr = float64(metric.MTTR)
+				break
 			}
-			return true
 		}
+	} else {
+		refresh = !status.guess(logger)
 	}
-	return true
-}
 
-func (s FailureEquipments) String() string {
-	str := fmt.Sprintf("%d[", len(s.recoveryTime))
-	for k, v := range s.recoveryTime {
-		str += fmt.Sprintf("%s:%v ", k, v.Sub(time.Now()))
+	if refresh {
+		status.ok = rand.Float64() <= status.mtbf/(status.mttr+status.mtbf)
+		status.startFrom = time.Now()
+		allStatus[target] = status
 	}
-	return str + "]"
-}
 
-var failureEquipments = FailureEquipments{
-	recoveryTime: make(map[string]time.Time),
+	level.Debug(logger).Log("target", target, "currentStatus", status)
+	return status.ok
 }
 
 func ProbeFakeICMP(ctx context.Context, target string, module config.Module, registry *prometheus.Registry, logger log.Logger) (success bool) {
@@ -89,8 +112,6 @@ func ProbeFakeICMP(ctx context.Context, target string, module config.Module, reg
 			Help: "Duration of icmp request by phase",
 		}, []string{"phase"})
 	)
-	failureEquipments.logger = logger
-	failureEquipments.config = module.FakeICMP
 
 	for _, lv := range []string{"resolve", "setup", "rtt"} {
 		durationGaugeVec.WithLabelValues(lv)
@@ -120,8 +141,8 @@ func ProbeFakeICMP(ctx context.Context, target string, module config.Module, reg
 
 	rttStart := time.Now()
 	level.Info(logger).Log("msg", "Waiting for reply packets")
-	ok := failureEquipments.IsOK(target)
-	level.Debug(logger).Log("failureEquipments", fmt.Sprintf("%v", failureEquipments))
+	ok := IsOK(target, module.FakeICMP, logger)
+	level.Debug(logger).Log("allStatus", fmt.Sprintf("%v", allStatus))
 	durationGaugeVec.WithLabelValues("rtt").Add(time.Since(rttStart).Seconds())
 	level.Info(logger).Log("msg", "Found matching reply packet")
 	return ok
