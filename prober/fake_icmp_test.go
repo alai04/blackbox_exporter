@@ -34,6 +34,7 @@ func TestFakeICMPHalfHalf(t *testing.T) {
 	if !ProbeFakeICMP(testCTX, "192.100.1.2", module, prometheus.NewRegistry(), log.NewNopLogger()) {
 		t.Fatalf("FakeICMP module failed, expected success.")
 	}
+
 	nSamples, nOK := 100, 0
 	for i := 0; i < nSamples; i++ {
 		if ProbeFakeICMP(testCTX, fmt.Sprintf("192.20.0.%d", i+1), module, prometheus.NewRegistry(), log.NewNopLogger()) {
@@ -42,5 +43,12 @@ func TestFakeICMPHalfHalf(t *testing.T) {
 	}
 	if nOK < 20 || nOK > 80 {
 		t.Fatalf("FakeICMP module error to large, expected half.")
+	}
+
+	target := "192.20.1.1"
+	ok1 := ProbeFakeICMP(testCTX, target, module, prometheus.NewRegistry(), log.NewNopLogger())
+	ok2 := ProbeFakeICMP(testCTX, target, module, prometheus.NewRegistry(), log.NewNopLogger())
+	if ok1 != ok2 {
+		t.Fatalf("Continuously FakeICMP should return same result.")
 	}
 }
